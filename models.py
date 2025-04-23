@@ -21,52 +21,41 @@ def get_model_size(model):
 
 
 def build_or_load_gen_model(args):
-    # Load config and tokenizer
+    # 1) Load config & tokenizer
     config = AutoConfig.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path
+        args.config_name or args.model_name_or_path
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer_name,
+        args.tokenizer_name or args.model_name_or_path,
         use_fast=True
     )
 
+    # 2) Chọn quantization nếu bits==4 hoặc 8
     use_quant = args.bits in (4, 8)
-use_lora = args.use_lora
-
-if use_quant:
-    # Setup BitsAndBytes quantization config for QLoRA
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=(args.bits == 4),
-        load_in_8bit=(args.bits == 8),
-        bnb_4bit_quant_type=args.quant_type,
-        bnb_4bit_use_double_quant=args.double_quant,
-        bnb_4bit_compute_dtype=(torch.bfloat16 if args.bf16 else torch.float16)
-    )
-    model = AutoModelForSeq2SeqLM.from_pretrained(
-        args.model_name_or_path,
-        quantization_config=bnb_config,
-        device_map="auto" if torch.cuda.is_available() and not args.no_cuda else None,
-        trust_remote_code=True
-    )
-    if use_lora:
-        model = prepare_model_for_kbit_training(model)
-        peft_config = LoraConfig(
-            task_type="SEQ_2_SEQ_LM",
-            inference_mode=False,
-            r=args.lora_r,
-            lora_alpha=args.lora_alpha,
-            target_modules=["q", "v"],
-            lora_dropout=args.lora_dropout
+    if use_quant:
+        # QLoRA (quantize-only)
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=(args.bits == 4),
+            load_in_8bit=(args.bits == 8),
+            bnb_4bit_quant_type=args.quant_type,
+            bnb_4bit_use_double_quant=args.double_quant,
+            bnb_4bit_compute_dtype=(torch.bfloat16 if args.bf16 else torch.float16),
         )
-        model = get_peft_model(model, peft_config)
-
-else:
-    # Standard full-precision fine-tuning
-    config_class, model_class, _ = MODEL_CLASSES[args.model_type]
-    model = model_class.from_pretrained(
-        args.model_name_or_path,
-        config=config
-    )
+        model = AutoModelForSeq2SeqLM.from_pretrained(
+            args.model_name_or_path,
+            quantization_config=bnb_config,
+            device_map="auto" if torch.cuda.is_available() and not args.no_cuda else None,
+            trust_remote_code=True,
+        )
+    else:
+        # Full-precision
+        if args.model_type not in MODEL_CLASSES:
+            raise ValueError(f"Unsupported model type: {args.model_type}")
+        config_class, model_class, _ = MODEL_CLASSES[args.model_type]
+        model = model_class.from_pretrained(
+            args.model_name_or_path,
+            config=config
+        )
 
 logger.info("Model loaded: %s", get_model_size(model))
 
