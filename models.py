@@ -21,28 +21,63 @@ def get_model_size(model):
 
 
 def build_or_load_gen_model(args):
-    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
-    config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path)
-    tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name)
-    if args.model_type == 'roberta':
-        encoder = model_class.from_pretrained(args.model_name_or_path, config=config)
-        decoder_layer = nn.TransformerDecoderLayer(d_model=config.hidden_size, nhead=config.num_attention_heads)
-        decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
-        model = Seq2Seq(encoder=encoder, decoder=decoder, config=config,
-                        beam_size=args.beam_size, max_length=args.max_target_length,
-                        sos_id=tokenizer.cls_token_id, eos_id=tokenizer.sep_token_id)
-    else:
-        model = model_class.from_pretrained(args.model_name_or_path)
+    # Load config and tokenizer
+    config = AutoConfig.from_pretrained(
+        args.config_name if args.config_name else args.model_name_or_path
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.tokenizer_name,
+        use_fast=True
+    )
 
-    logger.info("Finish loading model [%s] from %s", get_model_size(model), args.model_name_or_path)
+    use_quant = args.bits in (4, 8)
+use_lora = args.use_lora
 
-    if args.load_model_path is not None:
-        logger.info("Reload model from {}".format(args.load_model_path))
-        model.load_state_dict(torch.load(args.load_model_path))
-    else:
-        logger.info("Do not Load Models.")
+if use_quant:
+    # Setup BitsAndBytes quantization config for QLoRA
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=(args.bits == 4),
+        load_in_8bit=(args.bits == 8),
+        bnb_4bit_quant_type=args.quant_type,
+        bnb_4bit_use_double_quant=args.double_quant,
+        bnb_4bit_compute_dtype=(torch.bfloat16 if args.bf16 else torch.float16)
+    )
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        args.model_name_or_path,
+        quantization_config=bnb_config,
+        device_map="auto" if torch.cuda.is_available() and not args.no_cuda else None,
+        trust_remote_code=True
+    )
+    if use_lora:
+        model = prepare_model_for_kbit_training(model)
+        peft_config = LoraConfig(
+            task_type="SEQ_2_SEQ_LM",
+            inference_mode=False,
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            target_modules=["q", "v"],
+            lora_dropout=args.lora_dropout
+        )
+        model = get_peft_model(model, peft_config)
 
-    return config, model, tokenizer
+else:
+    # Standard full-precision fine-tuning
+    config_class, model_class, _ = MODEL_CLASSES[args.model_type]
+    model = model_class.from_pretrained(
+        args.model_name_or_path,
+        config=config
+    )
+
+logger.info("Model loaded: %s", get_model_size(model))
+
+if args.load_model_path:
+    logger.info("Reloading model weights from %s", args.load_model_path)
+    state_dict = torch.load(args.load_model_path)
+    model.load_state_dict(state_dict)
+else:
+    logger.info("Using pretrained weights from %s", args.model_name_or_path)
+
+return config, model, tokenizer
 
 
 class RobertaClassificationHead(nn.Module):
