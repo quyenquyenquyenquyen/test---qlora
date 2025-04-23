@@ -1,18 +1,11 @@
-# 0) Gỡ bản PyTorch không tương thích
-pip uninstall -y torch torchvision torchaudio
-
-# 1) Cài lại PyTorch cho CUDA 11.7
-pip install --no-cache-dir torch==2.0.1+cu117 torchvision==0.15.2+cu117 torchaudio==2.0.2 --extra-index-url https://download.pytorch.org/whl/cu117
-
-# 2) Xác nhận import
-python - <<'PYCODE'
-import torch
-print(torch.__version__, torch.version.cuda)
-PYCODE
-
-# 3) Nếu ổn, tiếp tục cài bitsandbytes tương thích
+# 0) Cài bitsandbytes phù hợp CUDA
 pip install --upgrade bitsandbytes-cuda117
 
+# 1) Hạ bản transformers xuống 4.34.0
+pip install --upgrade transformers==4.34.0
+
+# 2) (Nếu chưa làm) Thiết LD_LIBRARY_PATH để tìm CUDA libs
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 # Tạo các thư mục cần thiết
 mkdir -p model
 mkdir -p ./model/code2review_t5_data_task2/
