@@ -1,3 +1,10 @@
+# 0) Cài bitsandbytes tương thích CUDA
+pip install --upgrade bitsandbytes-cuda117
+
+# 1) Thiết thư viện CUDA
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda
+
 # Tạo các thư mục cần thiết
 mkdir -p model
 mkdir -p ./model/code2review_t5_data_task2/
