@@ -1,24 +1,36 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer,
-                          BartConfig, BartForConditionalGeneration, BartTokenizer,
-                          T5Config, T5ForConditionalGeneration, T5Tokenizer, AutoTokenizer)
 import logging
+from transformers import (
+    AutoConfig,
+    AutoTokenizer,
+    AutoModelForSeq2SeqLM,
+    BitsAndBytesConfig,
+    RobertaConfig,
+    RobertaModel,
+    RobertaTokenizer,
+    BartConfig,
+    BartForConditionalGeneration,
+    BartTokenizer,
+    T5Config,
+    T5ForConditionalGeneration,
+    T5Tokenizer,
+)
 
 logger = logging.getLogger(__name__)
 
-MODEL_CLASSES = {'roberta': (RobertaConfig, RobertaModel, RobertaTokenizer),
-                 't5': (T5Config, T5ForConditionalGeneration, AutoTokenizer),
-                 'codet5': (T5Config, T5ForConditionalGeneration, RobertaTokenizer),
-                 'bart': (BartConfig, BartForConditionalGeneration, BartTokenizer)}
-
+MODEL_CLASSES = {
+    'roberta': (RobertaConfig, RobertaModel, RobertaTokenizer),
+    't5': (T5Config, T5ForConditionalGeneration, T5Tokenizer),
+    'codet5': (T5Config, T5ForConditionalGeneration, RobertaTokenizer),
+    'bart': (BartConfig, BartForConditionalGeneration, BartTokenizer),
+}
 
 def get_model_size(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-    model_size = sum([np.prod(p.size()) for p in model_parameters])
-    return "{}M".format(round(model_size / 1e+6))
-
+    model_size = sum(np.prod(p.size()) for p in model_parameters)
+    return "{}M".format(round(model_size / 1e6))
 
 def build_or_load_gen_model(args):
     # 1) Load config & tokenizer
@@ -30,10 +42,9 @@ def build_or_load_gen_model(args):
         use_fast=True
     )
 
-    # 2) Chọn quantization nếu bits==4 hoặc 8
+    # 2) Choose quantization-only (QLoRA) if bits=4 or 8
     use_quant = args.bits in (4, 8)
     if use_quant:
-        # QLoRA (quantize-only)
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=(args.bits == 4),
             load_in_8bit=(args.bits == 8),
@@ -46,11 +57,13 @@ def build_or_load_gen_model(args):
         model = AutoModelForSeq2SeqLM.from_pretrained(
             args.model_name_or_path,
             quantization_config=bnb_config,
-            device_map="auto" if torch.cuda.is_available() and not args.no_cuda else None,
+            device_map=(
+                "auto" if torch.cuda.is_available() and not args.no_cuda else None
+            ),
             trust_remote_code=True,
         )
     else:
-        # Full-precision
+        # Full-precision fallback
         if args.model_type not in MODEL_CLASSES:
             raise ValueError(f"Unsupported model type: {args.model_type}")
         config_class, model_class, _ = MODEL_CLASSES[args.model_type]
@@ -59,7 +72,7 @@ def build_or_load_gen_model(args):
             config=config
         )
 
-    # 3) (Tùy chọn) reload checkpoint nếu có
+    # 3) (Optional) reload checkpoint if provided
     if args.load_model_path:
         logger.info("Reloading weights from %s", args.load_model_path)
         state_dict = torch.load(args.load_model_path)
