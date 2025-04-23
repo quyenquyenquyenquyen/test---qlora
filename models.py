@@ -65,8 +65,7 @@ if args.load_model_path:
     model.load_state_dict(state_dict)
 else:
     logger.info("Using pretrained weights from %s", args.model_name_or_path)
-
-    return config, model, tokenizer
+  return config, model, tokenizer
 
 
 class RobertaClassificationHead(nn.Module):
