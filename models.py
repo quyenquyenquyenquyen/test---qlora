@@ -23,10 +23,10 @@ def get_model_size(model):
 def build_or_load_gen_model(args):
     # 1) Load config & tokenizer
     config = AutoConfig.from_pretrained(
-        args.config_name or args.model_name_or_path
+        args.config_name if args.config_name else args.model_name_or_path
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer_name or args.model_name_or_path,
+        args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
         use_fast=True
     )
 
@@ -39,7 +39,9 @@ def build_or_load_gen_model(args):
             load_in_8bit=(args.bits == 8),
             bnb_4bit_quant_type=args.quant_type,
             bnb_4bit_use_double_quant=args.double_quant,
-            bnb_4bit_compute_dtype=(torch.bfloat16 if args.bf16 else torch.float16),
+            bnb_4bit_compute_dtype=(
+                torch.bfloat16 if args.bf16 else torch.float16
+            ),
         )
         model = AutoModelForSeq2SeqLM.from_pretrained(
             args.model_name_or_path,
@@ -57,15 +59,20 @@ def build_or_load_gen_model(args):
             config=config
         )
 
-logger.info("Model loaded: %s", get_model_size(model))
+    # 3) (Tùy chọn) reload checkpoint nếu có
+    if args.load_model_path:
+        logger.info("Reloading weights from %s", args.load_model_path)
+        state_dict = torch.load(args.load_model_path)
+        model.load_state_dict(state_dict)
+    else:
+        logger.info("Using pretrained weights from %s", args.model_name_or_path)
 
-if args.load_model_path:
-    logger.info("Reloading model weights from %s", args.load_model_path)
-    state_dict = torch.load(args.load_model_path)
-    model.load_state_dict(state_dict)
-else:
-    logger.info("Using pretrained weights from %s", args.model_name_or_path)
-  return config, model, tokenizer
+    logger.info(
+        "Loaded model [%s] with %s trainable params",
+        args.model_name_or_path,
+        get_model_size(model)
+    )
+    return config, model, tokenizer
 
 
 class RobertaClassificationHead(nn.Module):
