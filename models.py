@@ -17,7 +17,7 @@ from transformers import (
     T5ForConditionalGeneration,
     T5Tokenizer,
 )
-
+from peft import LoraConfig, get_peft_model
 logger = logging.getLogger(__name__)
 
 MODEL_CLASSES = {
@@ -42,7 +42,7 @@ def build_or_load_gen_model(args):
         use_fast=True
     )
 
-    # 2) Nếu bits==4 hoặc 8 => quantize-only (QLoRA)
+    # 2) Quantize-only (QLoRA) nếu bits==4 hoặc 8
     use_quant = args.bits in (4, 8)
     if use_quant:
         bnb_config = BitsAndBytesConfig(
@@ -50,7 +50,7 @@ def build_or_load_gen_model(args):
             load_in_8bit=(args.bits == 8),
             bnb_4bit_quant_type=args.quant_type,
             bnb_4bit_use_double_quant=args.double_quant,
-            bnb_4bit_compute_dtype=(torch.bfloat16 if args.bf16 else torch.float16),
+            bnb_4bit_compute_dtype=(torch.float16 if args.fp16 else torch.bfloat16),
         )
         model = AutoModelForSeq2SeqLM.from_pretrained(
             args.model_name_or_path,
@@ -58,22 +58,30 @@ def build_or_load_gen_model(args):
             trust_remote_code=True,
         )
     else:
-        # Fallback full-precision
-        if args.model_type not in MODEL_CLASSES:
-            raise ValueError(f"Unsupported model type: {args.model_type}")
         config_class, model_class, _ = MODEL_CLASSES[args.model_type]
         model = model_class.from_pretrained(
             args.model_name_or_path,
             config=config
         )
 
-    # 3) Reload checkpoint nếu có
+    # 3) Tích hợp LoRA (PEFT) — chỉ train các adapter, giữ model gốc cố định ở 4-bit
+    if args.use_lora:
+        peft_config = LoraConfig(
+            task_type="SEQ_2_SEQ_LM",
+            inference_mode=False,
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+        )
+        model = get_peft_model(model, peft_config)
+        logger.info("Applied LoRA: r=%d, alpha=%d, dropout=%.2f", 
+                    args.lora_r, args.lora_alpha, args.lora_dropout)
+
+    # 4) Reload checkpoint nếu có
     if args.load_model_path:
-        logger.info("Reloading weights from %s", args.load_model_path)
         state_dict = torch.load(args.load_model_path)
         model.load_state_dict(state_dict)
-    else:
-        logger.info("Using pretrained weights from %s", args.model_name_or_path)
 
     logger.info(
         "Loaded model [%s] with %s trainable params",
@@ -81,8 +89,6 @@ def build_or_load_gen_model(args):
         get_model_size(model)
     )
     return config, model, tokenizer
-
-
 
 class RobertaClassificationHead(nn.Module):
     """Head for sentence-level classification tasks."""
