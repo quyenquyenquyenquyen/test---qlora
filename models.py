@@ -35,14 +35,14 @@ def get_model_size(model):
 def build_or_load_gen_model(args):
     # 1) Load config & tokenizer
     config = AutoConfig.from_pretrained(
-        args.config_name if args.config_name else args.model_name_or_path
+        args.config_name or args.model_name_or_path
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
+        args.tokenizer_name or args.model_name_or_path,
         use_fast=True
     )
 
-    # 2) Choose quantization-only (QLoRA) if bits=4 or 8
+    # 2) Nếu bits==4 hoặc 8 => quantize-only (QLoRA)
     use_quant = args.bits in (4, 8)
     if use_quant:
         bnb_config = BitsAndBytesConfig(
@@ -50,20 +50,16 @@ def build_or_load_gen_model(args):
             load_in_8bit=(args.bits == 8),
             bnb_4bit_quant_type=args.quant_type,
             bnb_4bit_use_double_quant=args.double_quant,
-            bnb_4bit_compute_dtype=(
-                torch.bfloat16 if args.bf16 else torch.float16
-            ),
+            bnb_4bit_compute_dtype=(torch.bfloat16 if args.bf16 else torch.float16),
         )
         model = AutoModelForSeq2SeqLM.from_pretrained(
             args.model_name_or_path,
             quantization_config=bnb_config,
-            device_map=(
-                "auto" if torch.cuda.is_available() and not args.no_cuda else None
-            ),
+            device_map="auto" if torch.cuda.is_available() and not args.no_cuda else None,
             trust_remote_code=True,
         )
     else:
-        # Full-precision fallback
+        # Fallback full-precision
         if args.model_type not in MODEL_CLASSES:
             raise ValueError(f"Unsupported model type: {args.model_type}")
         config_class, model_class, _ = MODEL_CLASSES[args.model_type]
@@ -72,7 +68,7 @@ def build_or_load_gen_model(args):
             config=config
         )
 
-    # 3) (Optional) reload checkpoint if provided
+    # 3) Reload checkpoint nếu có
     if args.load_model_path:
         logger.info("Reloading weights from %s", args.load_model_path)
         state_dict = torch.load(args.load_model_path)
@@ -86,6 +82,7 @@ def build_or_load_gen_model(args):
         get_model_size(model)
     )
     return config, model, tokenizer
+
 
 
 class RobertaClassificationHead(nn.Module):
