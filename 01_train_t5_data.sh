@@ -1,26 +1,4 @@
-# 0) Gỡ các build PyTorch/Transformers cũ
-pip uninstall -y torch torchvision torchaudio transformers huggingface-hub fsspec bitsandbytes
 
-# 1) Cài PyTorch và các extension khớp với CUDA 11.8 (được driver CUDA 12.6 hỗ trợ ngược)
-pip install --no-cache-dir \
-  torch==2.1.0+cu118 \
-  torchvision==0.16.0+cu118 \
-  torchaudio==2.1.0+cu118 \
-  --index-url https://download.pytorch.org/whl/cu118
-
-# 2) Cài quantization engine bitsandbytes cho CUDA 11.8
-pip install --no-cache-dir bitsandbytes-cuda118
-
-# 3) Hạ transformers về 4.34.0 (loại bỏ torchao dependency)
-#    và cài huggingface-hub >=0.25 & fsspec <=2024.12 để hài hoà với peft/datasets
-pip install --no-cache-dir \
-  transformers==4.34.0 \
-  huggingface-hub==0.25.3 \
-  fsspec==2024.12.0
-
-# 4) Thiết đường dẫn CUDA (nếu cần)
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-export CUDA_HOME=/usr/local/cuda
 
 # 5) Tạo các thư mục
 mkdir -p model
