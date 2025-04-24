@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES=0 python run_gen.py --do_train --do_eval --do_eval_bleu \
         --tokenizer_name=Salesforce/codet5-base \
         --model_name_or_path=Salesforce/codet5-base \
         --bits 4 --quant_type nf4 \
-        --bf16 \
+        --fp16 \
         --data_dir "/kaggle/input/daataa10/task2_data/t5_data/codet5_format_data" \
         --cache_path ./model/code2review_t5_data_task2/cache/ \
         --output_dir ./model/code2review_t5_data_task2/outputs/ \
