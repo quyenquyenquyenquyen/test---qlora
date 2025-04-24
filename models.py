@@ -55,7 +55,6 @@ def build_or_load_gen_model(args):
         model = AutoModelForSeq2SeqLM.from_pretrained(
             args.model_name_or_path,
             quantization_config=bnb_config,
-            device_map="auto" if torch.cuda.is_available() and not args.no_cuda else None,
             trust_remote_code=True,
         )
     else:
