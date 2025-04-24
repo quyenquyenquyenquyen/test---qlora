@@ -287,6 +287,11 @@ def main():
                 nb_tr_examples += source_ids.size(0)
                 nb_tr_steps += 1
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+
+              
+              
+              
 
                 if nb_tr_steps % args.gradient_accumulation_steps == 0:
                     # Update parameters
