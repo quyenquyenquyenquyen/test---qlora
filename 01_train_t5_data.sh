@@ -1,18 +1,30 @@
-# 0) Cài bitsandbytes phù hợp CUDA
-pip install --upgrade bitsandbytes-cuda117
+# 0) Gỡ các build PyTorch/Transformers cũ
+pip uninstall -y torch torchvision torchaudio transformers huggingface-hub fsspec bitsandbytes
 
-# 1) Hạ bản transformers xuống 4.34.0
-pip install --upgrade transformers==4.34.0
+# 1) Cài PyTorch và các extension khớp với CUDA 11.8 (được driver CUDA 12.6 hỗ trợ ngược)
+pip install --no-cache-dir \
+  torch==2.1.0+cu118 \
+  torchvision==0.16.0+cu118 \
+  torchaudio==2.1.0+cu118 \
+  --index-url https://download.pytorch.org/whl/cu118
 
-# 2) (Nếu chưa làm) Thiết LD_LIBRARY_PATH để tìm CUDA libs
+# 2) Cài quantization engine bitsandbytes cho CUDA 11.8
+pip install --no-cache-dir bitsandbytes-cuda118
+
+# 3) Hạ transformers về 4.34.0 (loại bỏ torchao dependency)
+#    và cài huggingface-hub >=0.25 & fsspec <=2024.12 để hài hoà với peft/datasets
+pip install --no-cache-dir \
+  transformers==4.34.0 \
+  huggingface-hub==0.25.3 \
+  fsspec==2024.12.0
+
+# 4) Thiết đường dẫn CUDA (nếu cần)
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-# Tạo các thư mục cần thiết
+export CUDA_HOME=/usr/local/cuda
+
+# 5) Tạo các thư mục
 mkdir -p model
-mkdir -p ./model/code2review_t5_data_task2/
-mkdir -p ./model/code2review_t5_data_task2/cache/
-mkdir -p ./model/code2review_t5_data_task2/outputs/
-mkdir -p ./model/code2review_t5_data_task2/summary/
-mkdir -p ./model/code2review_t5_data_task2/outputs/results
+mkdir -p ./model/code2review_t5_data_task2/{cache,outputs,summary,outputs/results}
 
 # Chạy script huấn luyện CodeT5 với QLoRA
 CUDA_VISIBLE_DEVICES=0 python run_gen.py --do_train --do_eval --do_eval_bleu \
