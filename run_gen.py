@@ -111,7 +111,7 @@ def eval_bleu_epoch(args, eval_data, eval_examples, model, tokenizer, split_tag,
 
                 top_preds = [pred[0].cpu().numpy() for pred in preds]
             else:
-                preds = model.generate(source_ids,
+                preds = model.generate(input_ids=source_ids,
                                        attention_mask=source_mask,
                                        use_cache=True,
                                        num_beams=args.beam_size,
