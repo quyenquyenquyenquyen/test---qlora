@@ -1,5 +1,5 @@
 
-
+pip install --upgrade bitsandbytes
 # 5) Tạo các thư mục
 mkdir -p model
 mkdir -p ./model/code2review_t5_data_task2/{cache,outputs,summary,outputs/results}
