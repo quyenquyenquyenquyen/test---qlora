@@ -1,57 +1,71 @@
 #!/bin/bash
 
-# --- Tùy chọn: Copy checkpoint thủ công nếu cần resume từ một checkpoint cụ thể không có trong output_dir ---
-# Ví dụ:
-# CKPT_SRC_DIR_ON_KAGGLE=/kaggle/input/my-previous-checkpoint/checkpoint-epoch-5 
-# TARGET_CKPT_DIR=./model/code2review_t5_data_task2/outputs/checkpoint-epoch-5
-# if [ -d "$CKPT_SRC_DIR_ON_KAGGLE" ]; then
-#   echo "Copying checkpoint from $CKPT_SRC_DIR_ON_KAGGLE to $TARGET_CKPT_DIR"
-#   mkdir -p ${TARGET_CKPT_DIR}
-#   cp ${CKPT_SRC_DIR_ON_KAGGLE}/checkpoint.pt ${TARGET_CKPT_DIR}/
-# else
-#   echo "Source checkpoint $CKPT_SRC_DIR_ON_KAGGLE not found. Will attempt to resume from existing output_dir if any."
-# fi
-# --- Kết thúc phần copy checkpoint tùy chọn ---
+# --- Tùy chọn: Copy checkpoint thủ công nếu cần resume ---
+# ... (giữ nguyên nếu bạn cần) ...
 
-
-# Cài đặt/Nâng cấp thư viện (nếu cần, ví dụ cho QLoRA)
+# Cài đặt thư viện
+echo "INFO: Updating pip..."
 pip install --upgrade pip
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 # ví dụ cho CUDA 11.8
+
+echo "INFO: Uninstalling potentially conflicting torch/torchvision versions..."
+pip uninstall torch torchvision torchaudio -y
+
+echo "INFO: Installing PyTorch, torchvision, torchaudio for a specific CUDA version (e.g., cu118 or cu121/cu124)"
+# Lựa chọn 1: Cài cho CUDA 11.8 (thường ổn định cho nhiều thư viện)
+# Hãy chắc chắn GPU của bạn hỗ trợ CUDA 11.8 runtime.
+# pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
+
+# Lựa chọn 2: Cài cho CUDA 12.1 (Nếu GPU hỗ trợ tốt và bitsandbytes tương thích)
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Lựa chọn 3: Dựa theo phiên bản PyTorch mà Kaggle có thể đã cài sẵn (ví dụ cu124 từ log của bạn)
+# Nếu bạn muốn giữ phiên bản PyTorch mặc định của Kaggle, hãy đảm bảo torchvision/torchaudio khớp.
+# Thông thường, nếu bạn không chỉ định phiên bản CUDA, pip sẽ cố gắng cài phiên bản mới nhất phù hợp.
+# Tuy nhiên, để kiểm soát, hãy thử chỉ định rõ. Ví dụ với cu121 (phổ biến hơn cu124 một chút cho các gói):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# HOẶC nếu bạn chắc chắn muốn cu118 cho bitsandbytes và các gói khác:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+
+echo "INFO: Installing other dependencies..."
 pip install transformers datasets sentencepiece accelerate bitsandbytes evaluate rouge_score nltk tensorboard # Các thư viện phổ biến
 
 export TOKENIZERS_PARALLELISM=false
 
+# ... (phần còn lại của script train.sh của bạn giữ nguyên) ...
+
 # Tạo các thư mục
-OUTPUT_BASE_DIR=./model/code2review_t5_qlora_task2 # Đổi tên thư mục để phân biệt với lần chạy không QLoRA
+OUTPUT_BASE_DIR=./model/code2review_t5_qlora_task2 
 mkdir -p ${OUTPUT_BASE_DIR}/cache
-mkdir -p ${OUTPUT_BASE_DIR}/outputs/results # outputs/results
+mkdir -p ${OUTPUT_BASE_DIR}/outputs/results 
 mkdir -p ${OUTPUT_BASE_DIR}/summary
 
-# Tham số
+# Tham số (giữ nguyên như bạn đã có)
 TASK_NAME="refine"
 SUB_TASK="small"
 MODEL_TYPE="codet5"
-MODEL_NAME="Salesforce/codet5-base" # Hoặc Salesforce/codet5-large nếu dùng large
-DATA_DIR="/kaggle/input/daataa5/task2_data/t5_data/codet5_format_data" # Cập nhật đường dẫn data của bạn
+MODEL_NAME="Salesforce/codet5-base" 
+DATA_DIR="/kaggle/input/daataa10/task2_data/t5_data/codet5_format_data" 
 OUTPUT_DIR="${OUTPUT_BASE_DIR}/outputs"
 CACHE_PATH="${OUTPUT_BASE_DIR}/cache"
 SUMMARY_DIR="${OUTPUT_BASE_DIR}/summary"
 RES_DIR="${OUTPUT_DIR}/results"
 RES_FN="${RES_DIR}/summary_codet5_qlora.txt"
 
-NUM_TRAIN_EPOCHS=10 # Ví dụ: 5 epochs
-LEARNING_RATE=1e-5 # Giữ nguyên hoặc điều chỉnh
-WARMUP_STEPS=100 # Giảm nếu dataset nhỏ hoặc epoch ít
+NUM_TRAIN_EPOCHS=5 
+LEARNING_RATE=1e-5 
+WARMUP_STEPS=100 
 GRAD_ACC_STEPS=2
-TRAIN_BATCH_SIZE=8 # Điều chỉnh dựa trên VRAM
+TRAIN_BATCH_SIZE=8 
 EVAL_BATCH_SIZE=8
 MAX_SOURCE_LENGTH=512
 MAX_TARGET_LENGTH=100
 BEAM_SIZE=5
-PATIENCE_VAL=3 # Patience cho early stopping
-LOGGING_STEPS_VAL=50 # Log mỗi 50 global steps
+PATIENCE_VAL=3 
+LOGGING_STEPS_VAL=50 
 
-# Chạy script huấn luyện CodeT5 với QLoRA và resume
+# Chạy script huấn luyện
+echo "INFO: Starting training script..."
 CUDA_VISIBLE_DEVICES=0 python run_gen.py \
     --do_train \
     --do_eval \
@@ -84,10 +98,6 @@ CUDA_VISIBLE_DEVICES=0 python run_gen.py \
     --max_source_length ${MAX_SOURCE_LENGTH} \
     --max_target_length ${MAX_TARGET_LENGTH} \
     --resume_from_checkpoint \
-    --logging_steps ${LOGGING_STEPS_VAL} \
-    # --save_last_checkpoints --always_save_model # Các cờ này có thể không cần thiết nữa
-    #                                            # vì đã có lưu mỗi epoch và best checkpoint.
-    #                                            # Tuy nhiên, chúng không gây hại nếu args không dùng đến.
-    # --do_test # Thêm cờ này nếu bạn muốn chạy test sau khi huấn luyện xong
+    --logging_steps ${LOGGING_STEPS_VAL}
 
 echo "Training finished. Output at ${OUTPUT_DIR}"
